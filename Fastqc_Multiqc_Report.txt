@@ -1,0 +1,171 @@
+### Generate fastqc and then multiqc reports for fastq files
+
+# pre-trim:
+
+# Create and edit the SLURM script
+nano 6509_fastqc_multiqc.slurm
+
+#!/bin/bash
+#SBATCH --job-name=6509_fastqc_multiqc
+#SBATCH --output=/fs1/home/kmg02/Sequencing_Data/logs/6509_fastqc_multiqc_%j.out
+#SBATCH --error=/fs1/home/kmg02/Sequencing_Data/logs/error=6509_fastqc_multiqc_%j.err
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --time=05:00:00
+#SBATCH --partition=normal
+
+# Load Conda (from your own stack)
+module load sstack/main
+module use /fs1/home/kmg02/sstack/rhel_8/modules
+module load conda/myconda
+
+#activate fastqc_env
+source $(conda info --base)/etc/profile.d/conda.sh
+conda activate fastqc_env
+
+# Generate fastqc reports from fastq files that have been primer trimmed
+#path after -o is output folder
+fastqc /fs1/home/kmg02/Sequencing_Data/fastq_primer_cut/*.fastq.gz -o /fs1/home/kmg02/Sequencing_Data/QC/pre-trim
+
+
+## Use multiqc to compile the data from all individual fastqc reports into one report.
+
+## Activate and run multiqc
+source $(conda info --base)/etc/profile.d/conda.sh
+conda activate multiqc_env
+multiqc /fs1/home/kmg02/Sequencing_Data/QC/pre-trim -o /fs1/home/kmg02/Sequencing_Data/QC/pre-trim/multiqc
+
+# unload conda when done
+module unload conda
+
+# Save and exit nano
+# Save: press control o then enter
+# Exit: control x
+# other: control k (delete line)
+
+# Submit the job to SLURM
+sbatch 6509_fastqc_multiqc.slurm
+#job number: 373555
+squeue -j 373555
+#running, check back
+
+# post-trim:
+# run 16s and ITS separately since different trimming parameters were used
+
+# move filtered 16s and ITS to same folder
+find 16S/primercut_16s/filtered -type f -name "*16S*.fastq.gz" -exec cp {} DADA2/filtered_fastq \;
+find ITS/primercut_ITS/filtered -type f -name "*ITS*.fastq.gz" -exec cp {} DADA2/filtered_fastq \;
+
+# Run 16s:
+
+# Create and edit the SLURM script
+nano fastqc_multiqc_16s.slurm
+
+#!/bin/bash
+#SBATCH --job-name=fastqc_multiqc_16s
+#SBATCH --output=/fs1/scratch/kmg02/Sequencing_Data/logs/fastqc_multiqc_16s_%j.out
+#SBATCH --error=/fs1/scratch/kmg02/Sequencing_Data/logs/error=fastqc_multiqc_16s_%j.err
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --time=05:00:00
+#SBATCH --partition=normal
+
+# Load Conda (from your own stack)
+module load sstack/main
+module use /fs1/home/kmg02/sstack/rhel_8/modules
+module load conda/myconda
+
+#activate fastqc_env
+source $(conda info --base)/etc/profile.d/conda.sh
+conda activate fastqc_env
+
+# Generate fastqc reports from fastq files that have been dada2 filtered
+#path after -o is output folder
+fastqc /fs1/scratch/kmg02/Sequencing_Data/16S/primercut_16s/filtered/*.fastq.gz -o /fs1/scratch/kmg02/Sequencing_Data/QC/post-trim/16S
+
+
+## Use multiqc to compile the data from all individual fastqc reports into one report.
+
+## Activate and run multiqc
+source $(conda info --base)/etc/profile.d/conda.sh
+conda activate multiqc_env
+
+mkdir -p /fs1/scratch/kmg02/Sequencing_Data/QC/post-trim/16S/multiqc
+
+multiqc /fs1/scratch/kmg02/Sequencing_Data/QC/post-trim/16S -o /fs1/scratch/kmg02/Sequencing_Data/QC/post-trim/16S/multiqc
+
+# unload conda when done
+module unload conda
+
+# Save and exit nano
+# Save: press control o then enter
+# Exit: control x
+# other: control k (delete line)
+
+# Submit the job to SLURM
+sbatch fastqc_multiqc_16s.slurm 
+squeue -j 376521
+# running
+
+
+# Run ITS:
+
+# Create and edit the SLURM script
+nano fastqc_multiqc_ITS.slurm
+
+#!/bin/bash
+#SBATCH --job-name=fastqc_multiqc_ITS
+#SBATCH --output=/fs1/scratch/kmg02/Sequencing_Data/logs/fastqc_multiqc_ITS_%j.out
+#SBATCH --error=/fs1/scratch/kmg02/Sequencing_Data/logs/error=fastqc_multiqc_ITS_%j.err
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --time=05:00:00
+#SBATCH --partition=normal
+
+# Load Conda (from your own stack)
+module load sstack/main
+module use /fs1/home/kmg02/sstack/rhel_8/modules
+module load conda/myconda
+
+#activate fastqc_env
+source $(conda info --base)/etc/profile.d/conda.sh
+conda activate fastqc_env
+
+# Generate fastqc reports from fastq files that have been dada2 filtered
+#path after -o is output folder
+fastqc /fs1/scratch/kmg02/Sequencing_Data/ITS/primercut_ITS/filtered/*.fastq.gz -o /fs1/scratch/kmg02/Sequencing_Data/QC/post-trim/ITS
+
+
+## Use multiqc to compile the data from all individual fastqc reports into one report.
+
+## Activate and run multiqc
+source $(conda info --base)/etc/profile.d/conda.sh
+conda activate multiqc_env
+
+mkdir -p /fs1/scratch/kmg02/Sequencing_Data/QC/post-trim/ITS/multiqc
+
+multiqc /fs1/scratch/kmg02/Sequencing_Data/QC/post-trim/ITS -o /fs1/scratch/kmg02/Sequencing_Data/QC/post-trim/ITS/multiqc
+
+# unload conda when done
+module unload conda
+
+# Save and exit nano
+# Save: press control o then enter
+# Exit: control x
+# other: control k (delete line)
+
+# Submit the job to SLURM
+sbatch fastqc_multiqc_ITS.slurm 
+squeue -j 376529
+# running
+
+
+
+
+
+
+
+

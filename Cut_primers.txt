@@ -1,0 +1,101 @@
+### Cut primers
+
+# Create and edit the SLURM script
+nano 6509_primer_trim.slurm
+
+#!/bin/bash
+#SBATCH --job-name=6509_primer_trim
+#SBATCH --output=/fs1/home/kmg02/Sequencing_Data/logs/6509_cutadapt_primer_%j.out
+#SBATCH --error=/fs1/home/kmg02/Sequencing_Data/logs/error=6509_cutadapt_primer_%j.err
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --time=05:00:00
+#SBATCH --partition=normal
+
+# may need to check if partition is actually normal
+sinfo
+
+# Load Conda (from your own stack)
+# Always need to do this first
+module load sstack/main
+module use /fs1/home/kmg02/sstack/rhel_8/modules
+module load conda/myconda
+
+# Activate environment
+source $(conda info --base)/etc/profile.d/conda.sh
+conda activate cutadapt_env
+
+# Directories
+IN_DIR="/fs1/home/kmg02/Sequencing_Data/raw_fastq_files"
+OUT_DIR="/fs1/home/kmg02/Sequencing_Data/fastq_primer_cut"
+
+# ITS primers
+ITS_FWD="GCATCGATGAAGAACGCAGC"
+ITS_REV="TCCTCCGCTTATTGATATGC"
+
+# 16S primers
+F16S_FWD1="CCTACGGGDGGCWGCAG"
+F16S_FWD2="CCTAYGGGGYGCWGCAG"
+F16S_REV="GACTACNVGGGTMTCTAATCC"
+
+# Log file check
+echo "ITS files found:" $(ls "$IN_DIR"/*ITS*_R1_001.fastq.gz 2>/dev/null | wc -l)
+echo "16S files found:" $(ls "$IN_DIR"/*16S*_R1_001.fastq.gz 2>/dev/null | wc -l)
+
+#need to decide whether to discard untrimmed reads or keep them
+
+# Trim ITS reads
+for fq1 in "$IN_DIR"/*ITS*_R1_001.fastq.gz; do
+    fq2="${fq1/_R1_/_R2_}"
+    base=$(basename "$fq1" _R1_001.fastq.gz)
+    cutadapt \
+        -g "$ITS_FWD" \
+        -G "$ITS_REV" \
+        -o "$OUT_DIR/${base}_R1_trimmed.fastq.gz" \
+        -p "$OUT_DIR/${base}_R2_trimmed.fastq.gz" \
+        "$fq1" "$fq2" \
+        --discard-untrimmed \
+        --pair-filter=both \
+        -j 4
+done
+
+# Trim 16S reads
+for fq1 in "$IN_DIR"/*16S*_R1_001.fastq.gz; do
+    fq2="${fq1/_R1_/_R2_}"
+    base=$(basename "$fq1" _R1_001.fastq.gz)
+    cutadapt \
+        -g "$F16S_FWD1" -g "$F16S_FWD2" \
+        -G "$F16S_REV" \
+        -o "$OUT_DIR/${base}_R1_trimmed.fastq.gz" \
+        -p "$OUT_DIR/${base}_R2_trimmed.fastq.gz" \
+        "$fq1" "$fq2" \
+        --discard-untrimmed \
+        --pair-filter=both \
+        -j 4
+done
+
+
+echo "Primer trimming completed."
+
+
+# Optional: Unload conda module
+module unload conda
+
+# Save and exit nano
+# Save: press control o then enter
+# Exit: control x
+# can type nano 6509_primer_trim.slurm
+# to open slurm script again
+# other: control k (delete line)
+
+# Submit the job to SLURM
+sbatch 6509_primer_trim.slurm
+# output job number will be given
+# number: 373529
+
+#Check status
+squeue -j 373529
+#job is running, check back in a few hours
+#job was successful, no errors
+
