@@ -1,0 +1,189 @@
+### DADA2 Check error rates ###
+
+# Start with 16s:
+
+# filtered files: /fs1/scratch/kmg02/Sequencing_Data/16S/primercut_16s/filtered
+
+nano plot_errors_16s.R
+
+#load dada2
+library(dada2)
+
+# Define path to your filtered 16S files
+filt_path <- "/fs1/scratch/kmg02/Sequencing_Data/16S/primercut_16s/filtered"
+
+# List forward and reverse filtered FASTQ files
+filtFs <- list.files(filt_path, pattern = "_F_filt\\.fastq\\.gz$", full.names = TRUE)
+filtRs <- list.files(filt_path, pattern = "_R_filt\\.fastq\\.gz$", full.names = TRUE)
+
+# Function to extract sample ID (everything before _F_filt or _R_filt)
+getSampleID <- function(f) sub("_[FR]_filt\\.fastq\\.gz$", "", basename(f))
+
+# Extract sample IDs
+sampleIDs_F <- sapply(filtFs, getSampleID)
+sampleIDs_R <- sapply(filtRs, getSampleID)
+
+# Find common sample IDs
+common_samples <- intersect(sampleIDs_F, sampleIDs_R)
+
+# Subset and order forward files
+filtFs <- filtFs[sampleIDs_F %in% common_samples]
+sampleIDs_F <- sampleIDs_F[sampleIDs_F %in% common_samples]
+ord_F <- order(sampleIDs_F)
+filtFs <- filtFs[ord_F]
+sampleIDs_F <- sampleIDs_F[ord_F]
+
+# Subset and order reverse files
+filtRs <- filtRs[sampleIDs_R %in% common_samples]
+sampleIDs_R <- sampleIDs_R[sampleIDs_R %in% common_samples]
+ord_R <- order(sampleIDs_R)
+filtRs <- filtRs[ord_R]
+sampleIDs_R <- sampleIDs_R[ord_R]
+
+# Final check
+stopifnot(length(filtFs) == length(filtRs))
+stopifnot(all(sampleIDs_F == sampleIDs_R))
+
+# Assign sample names
+sample.names <- sampleIDs_F
+names(filtFs) <- sample.names
+names(filtRs) <- sample.names
+
+# Errors
+errF <- learnErrors(filtFs, multithread=TRUE)
+errR <- learnErrors(filtRs, multithread=TRUE)
+
+# Graph errors & save images
+
+png("errF_16s.png", width=800, height=600)
+plotErrors(errF, nominalQ=TRUE)
+dev.off()
+
+png("errR_16s.png", width=800, height=600)
+plotErrors(errR, nominalQ=TRUE)
+dev.off()
+
+
+# Run in slurm:
+
+nano dada2_16s_errors.slurm
+
+#!/bin/bash
+#SBATCH --job-name=dada2_16s_errors
+#SBATCH --output=/fs1/scratch/kmg02/Sequencing_Data/logs/dada2_16s_errors_%j.out
+#SBATCH --error=/fs1/scratch/kmg02/Sequencing_Data/logs/error=dada2_16s_errors_%j.err
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=6
+#SBATCH --mem=32G
+#SBATCH --time=08:00:00
+#SBATCH --partition=normal
+
+# Load personal conda
+module load sstack/main
+module use /fs1/home/kmg02/sstack/rhel_8/modules
+module load conda/myconda
+
+# Activate R environment and run Rscript
+conda activate r_env_compatible 
+Rscript /fs1/scratch/kmg02/Sequencing_Data/DADA2/Rscripts/plot_errors_16s.R
+
+
+sbatch dada2_16s_errors.slurm
+squeue -j 376587
+# running
+
+# Now check ITS: 
+# filtered files: /fs1/scratch/kmg02/Sequencing_Data/ITS/primercut_ITS/filtered
+
+nano plot_errors_ITS.R
+
+#load dada2
+library(dada2)
+
+# Define path to your filtered 16S files
+filt_path <- "/fs1/scratch/kmg02/Sequencing_Data/ITS/primercut_ITS/filtered"
+
+# List forward and reverse filtered FASTQ files
+filtFs <- list.files(filt_path, pattern = "_F_filt\\.fastq\\.gz$", full.names = TRUE)
+filtRs <- list.files(filt_path, pattern = "_R_filt\\.fastq\\.gz$", full.names = TRUE)
+
+# Function to extract sample ID (everything before _F_filt or _R_filt)
+getSampleID <- function(f) sub("_[FR]_filt\\.fastq\\.gz$", "", basename(f))
+
+# Extract sample IDs
+sampleIDs_F <- sapply(filtFs, getSampleID)
+sampleIDs_R <- sapply(filtRs, getSampleID)
+
+# Find common sample IDs
+common_samples <- intersect(sampleIDs_F, sampleIDs_R)
+
+# Subset and order forward files
+filtFs <- filtFs[sampleIDs_F %in% common_samples]
+sampleIDs_F <- sampleIDs_F[sampleIDs_F %in% common_samples]
+ord_F <- order(sampleIDs_F)
+filtFs <- filtFs[ord_F]
+sampleIDs_F <- sampleIDs_F[ord_F]
+
+# Subset and order reverse files
+filtRs <- filtRs[sampleIDs_R %in% common_samples]
+sampleIDs_R <- sampleIDs_R[sampleIDs_R %in% common_samples]
+ord_R <- order(sampleIDs_R)
+filtRs <- filtRs[ord_R]
+sampleIDs_R <- sampleIDs_R[ord_R]
+
+# Final check
+stopifnot(length(filtFs) == length(filtRs))
+stopifnot(all(sampleIDs_F == sampleIDs_R))
+
+# Assign sample names
+sample.names <- sampleIDs_F
+names(filtFs) <- sample.names
+names(filtRs) <- sample.names
+
+# Errors
+errF <- learnErrors(filtFs, multithread=TRUE)
+errR <- learnErrors(filtRs, multithread=TRUE)
+
+# Graph errors & save images
+
+png("errF_ITS.png", width=800, height=600)
+plotErrors(errF, nominalQ=TRUE)
+dev.off()
+
+png("errR_ITS.png", width=800, height=600)
+plotErrors(errR, nominalQ=TRUE)
+dev.off()
+
+
+# Run in slurm:
+
+nano dada2_ITS_errors.slurm
+
+#!/bin/bash
+#SBATCH --job-name=dada2_ITS_errors
+#SBATCH --output=/fs1/scratch/kmg02/Sequencing_Data/logs/dada2_ITS_errors_%j.out
+#SBATCH --error=/fs1/scratch/kmg02/Sequencing_Data/logs/error=dada2_ITS_errors_%j.err
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=6
+#SBATCH --mem=32G
+#SBATCH --time=08:00:00
+#SBATCH --partition=normal
+
+# Load personal conda
+module load sstack/main
+module use /fs1/home/kmg02/sstack/rhel_8/modules
+module load conda/myconda
+
+# Activate R environment and run Rscript
+conda activate r_env_compatible 
+Rscript /fs1/scratch/kmg02/Sequencing_Data/DADA2/Rscripts/plot_errors_ITS.R
+
+
+sbatch dada2_ITS_errors.slurm
+squeue -j 376593
+# running
+
+
+
+
+

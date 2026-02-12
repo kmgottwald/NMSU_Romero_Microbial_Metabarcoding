@@ -1,0 +1,262 @@
+### DADA2: Merge reads and construct ASV table ###
+# 16s first, path to filtered files:
+# /fs1/scratch/kmg02/Sequencing_Data/16S/primercut_16s/filtered
+
+# make R-script:
+nano merge_ASV_16s.R
+# Paste text:
+
+library(dada2)
+
+# Sort files:
+filt_path <- "/fs1/scratch/kmg02/Sequencing_Data/16S/primercut_16s/filtered"
+
+# List all filtered fastq.gz files
+filt_files <- list.files(filt_path, pattern="fastq.gz", full.names=TRUE)
+
+# Separate forward and reverse reads
+filtFs <- filt_files[grepl("_F_filt\\.fastq\\.gz$", filt_files)]
+filtRs <- filt_files[grepl("_R_filt\\.fastq\\.gz$", filt_files)]
+
+# Sort to make sure forward and reverse files match order
+filtFs <- sort(filtFs)
+filtRs <- sort(filtRs)
+
+# Load RDS files of error rates:
+errF <- readRDS("/fs1/scratch/kmg02/Sequencing_Data/DADA2/output/16S/errF.rds")
+errR <- readRDS("/fs1/scratch/kmg02/Sequencing_Data/DADA2/output/16S/errR.rds")
+
+# Sample inference, load RDS files:
+dadaFs <- readRDS("/fs1/scratch/kmg02/Sequencing_Data/DADA2/output/16S/dadaFs.rds")
+dadaRs <- readRDS("/fs1/scratch/kmg02/Sequencing_Data/DADA2/output/16S/dadaRs.rds")
+print("Sample inference complete.")
+
+# Merge paired reads:
+mergers <- readRDS("/fs1/scratch/kmg02/Sequencing_Data/DADA2/output/16S/mergers.rds")
+print("Merging complete.")
+
+# Construct ASV table:
+seqtab <- makeSequenceTable(mergers)
+print(dim(seqtab))
+
+# Remove chimeras:
+seqtab_16s <- removeBimeraDenovo(seqtab, method="consensus", multithread=4, verbose=TRUE)
+print(dim(seqtab_16s))
+
+# Percent chimeras of merged reads
+sum(seqtab_16s)/sum(seqtab)
+
+# Get sample names
+sample.names <- sapply(filtFs, function(fname) {
+  sub("_F_filt\\.fastq\\.gz$", "", basename(fname))
+})
+
+# load out variable
+out <- read.csv("/fs1/scratch/kmg02/Sequencing_Data/DADA2/output/16S/filtered_output_16s.csv", row.names = 1)
+
+# Clean rownames(out) to match sample.names
+rownames(out) <- sub("_R1_trimmed\\.fastq\\.gz$", "", rownames(out))
+
+# check that sample names and row names match
+if (!all(sample.names == rownames(out))) {
+  stop("Sample names from file names and filtering summary (out) do not match.")
+}
+
+# Track reads through pipeline:
+getN <- function(x) sum(getUniques(x))
+track <- cbind(out, sapply(dadaFs, getN), sapply(dadaRs, getN), sapply(mergers, getN), rowSums(seqtab_16s))
+colnames(track) <- c("input", "filtered", "denoisedF", "denoisedR", "merged", "nonchim")
+rownames(track) <- sample.names
+head(track)
+# got to here and then failed at assign taxonomy
+
+# Assign taxonomy:
+taxa <- assignTaxonomy(seqtab_16s, "/fs1/scratch/kmg02/Sequencing_Data/DADA2/reference_files/silva_nr99_v138.1_train_set.fa.gz", multithread=4)
+
+# Add species-level assignment for exact matches:
+taxa <- addSpecies(taxa, "/fs1/scratch/kmg02/Sequencing_Data/DADA2/reference_files/silva_species_assignment_v138.1.fa.gz")
+
+# Inspect taxa:
+taxa.print <- taxa # Removing sequence rownames for display only
+rownames(taxa.print) <- NULL
+head(taxa.print)
+
+# Export taxa and seqtab.nochim for downstream analyses
+
+# Save RDS for further analysis in R
+saveRDS(seqtab_16s, file = "/fs1/scratch/kmg02/Sequencing_Data/DADA2/output/16S/seqtab_16s.rds")
+saveRDS(taxa, file = "/fs1/scratch/kmg02/Sequencing_Data/DADA2/output/16S/taxa_16s.rds")
+saveRDS(track, file = "/fs1/scratch/kmg02/Sequencing_Data/DADA2/output/16S/track_16s.rds")
+
+# Save as CSV for manual inspection
+write.csv(track, file = "/fs1/scratch/kmg02/Sequencing_Data/DADA2/output/16S/track_16S_reads.csv")
+write.csv(taxa.print, file = "/fs1/scratch/kmg02/Sequencing_Data/DADA2/output/16S/16s_taxa_table.csv")
+
+print("end of R-script")
+
+# Create slurm script:
+nano 16s_merge_ASV.slurm
+
+#!/bin/bash
+#SBATCH --job-name=16s_merge_ASV
+#SBATCH --output=logs/16s_merge_ASV_output.log
+#SBATCH --error=logs/16s_merge_ASV_error.log
+#SBATCH --ntasks=1
+#SBATCH --time=24:00:00
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=64G
+#SBATCH --partition=normal
+#SBATCH --mail-type=END,FAIL
+#SBATCH --mail-user=kmg02@nmsu.edu
+
+# Load personal conda
+module load sstack/main
+module use /fs1/home/kmg02/sstack/rhel_8/modules
+module load conda/myconda
+
+# Activate R environment and run Rscript
+conda activate r_env_compatible 
+Rscript /fs1/scratch/kmg02/Sequencing_Data/DADA2/Rscripts/merge_ASV_16s.R
+
+sbatch 16s_merge_ASV.slurm
+squeue -j 377363
+# re-running
+
+# reload RDS files into R for further analyses:
+seqtab.nochim <- readRDS("seqtab_nochim.rds")
+taxa <- readRDS("taxa.rds")
+
+
+# Next, run ITS:
+
+# make R-script:
+nano merge_ASV_ITS.R
+# Paste text:
+
+library(dada2)
+
+# Sort files:
+filt_path <- "/fs1/scratch/kmg02/Sequencing_Data/ITS/primercut_ITS/filtered"
+
+# List all filtered fastq.gz files
+filt_files <- list.files(filt_path, pattern="fastq.gz", full.names=TRUE)
+
+# Separate forward and reverse reads
+filtFs <- filt_files[grepl("_F_filt\\.fastq\\.gz$", filt_files)]
+filtRs <- filt_files[grepl("_R_filt\\.fastq\\.gz$", filt_files)]
+
+# Sort to make sure forward and reverse files match order
+filtFs <- sort(filtFs)
+filtRs <- sort(filtRs)
+
+# Learn error rates
+errF <- learnErrors(filtFs, multithread = 4)
+errR <- learnErrors(filtRs, multithread = 4)
+
+# Save errors as RDS files
+saveRDS(errF, file = "/fs1/scratch/kmg02/Sequencing_Data/DADA2/output/ITS/errF.rds")
+saveRDS(errR, file = "/fs1/scratch/kmg02/Sequencing_Data/DADA2/output/ITS/errR.rds")
+
+# Sample inference, save as RDS files:
+dadaFs <- dada(filtFs, err = errF, multithread = 4)
+dadaRs <- dada(filtRs, err = errR, multithread = 4)
+saveRDS(dadaFs, file = "/fs1/scratch/kmg02/Sequencing_Data/DADA2/output/ITS/dadaFs.rds")
+saveRDS(dadaRs, file = "/fs1/scratch/kmg02/Sequencing_Data/DADA2/output/ITS/dadaRs.rds")
+print("Sample inference complete.")
+
+# Merge paired reads:
+mergers <- mergePairs(dadaFs, filtFs, dadaRs, filtRs, verbose=TRUE)
+print("Merging complete.")
+saveRDS(mergers, file = "/fs1/scratch/kmg02/Sequencing_Data/DADA2/output/ITS/mergers.rds")
+
+# Construct ASV table:
+seqtab <- makeSequenceTable(mergers)
+print(dim(seqtab))
+
+# Remove chimeras:
+seqtab_ITS <- removeBimeraDenovo(seqtab, method="consensus", multithread=4, verbose=TRUE)
+print(dim(seqtab_ITS))
+
+# Percent chimeras of merged reads
+sum(seqtab_ITS)/sum(seqtab)
+
+# Get sample names
+sample.names <- sapply(filtFs, function(fname) {
+  sub("_F_filt\\.fastq\\.gz$", "", basename(fname))
+})
+
+# load out variable
+out <- read.csv("/fs1/scratch/kmg02/Sequencing_Data/DADA2/output/ITS/filtered_output_ITS.csv", row.names = 1)
+
+# Clean rownames(out) to match sample.names
+rownames(out) <- sub("_R1_trimmed\\.fastq\\.gz$", "", rownames(out))
+
+# check that sample names and row names match
+if (!all(sample.names == rownames(out))) {
+  stop("Sample names from file names and filtering summary (out) do not match.")
+}
+
+# Track reads through pipeline:
+getN <- function(x) sum(getUniques(x))
+track <- cbind(out, sapply(dadaFs, getN), sapply(dadaRs, getN), sapply(mergers, getN), rowSums(seqtab_ITS))
+colnames(track) <- c("input", "filtered", "denoisedF", "denoisedR", "merged", "nonchim")
+rownames(track) <- sample.names
+head(track)
+
+# Assign taxonomy using UNITE database:
+taxa <- assignTaxonomy(seqtab_ITS,
+                       "/fs1/scratch/kmg02/Sequencing_Data/DADA2/reference_files/UNITE/sh_general_release_dynamic_19.02.2025.fasta",
+                       multithread = 4,
+                       tryRC = TRUE)
+
+# Inspect taxa:
+taxa.print <- taxa # Removing sequence rownames for display only
+rownames(taxa.print) <- NULL
+head(taxa.print)
+
+# Export taxa and seqtab.nochim for downstream analyses
+
+# Save RDS for further analysis in R
+saveRDS(seqtab_ITS, file = "/fs1/scratch/kmg02/Sequencing_Data/DADA2/output/ITS/seqtab_ITS.rds")
+saveRDS(taxa, file = "/fs1/scratch/kmg02/Sequencing_Data/DADA2/output/ITS/taxa_ITS.rds")
+saveRDS(track, file = "/fs1/scratch/kmg02/Sequencing_Data/DADA2/output/ITS/track_ITS.rds")
+
+# Save as CSV for manual inspection
+write.csv(track, file = "/fs1/scratch/kmg02/Sequencing_Data/DADA2/output/ITS/track_ITS_reads.csv")
+write.csv(taxa.print, file = "/fs1/scratch/kmg02/Sequencing_Data/DADA2/output/ITS/ITS_taxa_table.csv")
+
+print("end of R-script")
+
+# Create slurm script:
+nano ITS_merge_ASV.slurm
+
+#!/bin/bash
+#SBATCH --job-name=ITS_merge_ASV
+#SBATCH --output=logs/ITS_merge_ASV_output.log
+#SBATCH --error=logs/ITS_merge_ASV_error.log
+#SBATCH --ntasks=1
+#SBATCH --time=24:00:00
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=64G
+#SBATCH --partition=normal
+#SBATCH --mail-type=END,FAIL
+#SBATCH --mail-user=kmg02@nmsu.edu
+
+# Load personal conda
+module load sstack/main
+module use /fs1/home/kmg02/sstack/rhel_8/modules
+module load conda/myconda
+
+# Activate R environment and run Rscript
+conda activate r_env_compatible 
+Rscript /fs1/scratch/kmg02/Sequencing_Data/DADA2/Rscripts/merge_ASV_ITS.R
+
+sbatch ITS_merge_ASV.slurm
+squeue -j 377167
+# successful
+
+
+
+
+
+
