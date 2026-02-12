@@ -1,0 +1,106 @@
+### DADA2 Quality Check ###
+# Files already primer trimmed
+# Check quality of 16s fastq files
+
+# Load personal conda
+module load sstack/main
+module use /fs1/home/kmg02/sstack/rhel_8/modules
+module load conda/myconda
+
+#activate R environment and open session
+conda activate r_env_compatible 
+R
+
+# R is open, install and load DADA2 package:
+library(dada2); packageVersion("dada2")
+
+# Define path to fastq files
+# Base path
+path <- "/fs1/home/kmg02/Sequencing_Data/16S/primercut_16s" 
+
+# Define paths to forward and reverse read folders
+R1_path <- file.path(path, "Forward_R1")
+R2_path <- file.path(path, "Reverse_R2")
+
+# Sort forward and reverse fastq filenames:
+fnFs_bact <- sort(list.files(R1_path, pattern="_R1_trimmed.fastq.gz", full.names = TRUE))
+fnRs_bact <- sort(list.files(R2_path, pattern="_R2_trimmed.fastq.gz", full.names = TRUE))
+
+# Inspect read quality:
+# [1:2] plots only the first two reads from forward and reverse
+# output will be saved as pdfs
+# in whatever directory you are working from
+# change plot margins w/ width and height
+
+pdf("Forward_Read_Quality_3_4.pdf", width = 10, height = 5)
+plotQualityProfile(fnFs_bact[3:4])		#forward
+dev.off()
+
+pdf("Reverse_Read_Quality_3_4.pdf", width = 10, height = 5)
+plotQualityProfile(fnRs_bact[3:4])		#reverse
+dev.off()
+
+
+# Check quality of ITS fastq files
+
+# Load personal conda
+module load sstack/main
+module use /fs1/home/kmg02/sstack/rhel_8/modules
+module load conda/myconda
+
+#activate R environment and open session
+conda activate r_env_compatible 
+R
+
+# R is open, install and load DADA2 package:
+library(dada2); packageVersion("dada2")
+
+# Define path to fastq files
+# Base path
+path <- "/fs1/scratch/kmg02/Sequencing_Data/ITS/primercut_ITS" 
+
+# Define paths to forward and reverse read folders
+R1_path <- file.path(path, "Forward_R1")
+R2_path <- file.path(path, "Reverse_R2")
+
+# Sort forward and reverse fastq filenames:
+fnFs_fungi <- sort(list.files(R1_path, pattern="_R1_trimmed.fastq.gz", full.names = TRUE))
+fnRs_fungi <- sort(list.files(R2_path, pattern="_R2_trimmed.fastq.gz", full.names = TRUE))
+
+# Inspect read quality:
+# [1:2] plots only the first two reads from forward and reverse
+# output will be saved as pdfs
+# in whatever directory you are working from
+# change plot margins w/ width and height
+
+pdf("Forward_Read_Quality_3_4.pdf", width = 10, height = 5)
+plotQualityProfile(fnFs_fungi[1:2])		#forward
+dev.off()
+
+pdf("Reverse_Read_Quality_3_4.pdf", width = 10, height = 5)
+plotQualityProfile(fnRs_fungi[1:2])		#reverse
+dev.off()
+
+pdf("Forward_Read_Quality_3_4.pdf", width = 10, height = 5)
+plotQualityProfile(fnFs_fungi[3:4])		#forward
+dev.off()
+
+pdf("Reverse_Read_Quality_3_4.pdf", width = 10, height = 5)
+plotQualityProfile(fnRs_fungi[3:4])		#reverse
+dev.off()
+
+pdf("Forward_Read_Quality_5_6.pdf", width = 10, height = 5)
+plotQualityProfile(fnFs_fungi[5:6])		#forward
+dev.off()
+
+pdf("Reverse_Read_Quality_5_6.pdf", width = 10, height = 5)
+plotQualityProfile(fnRs_fungi[5:6])		#reverse
+dev.off()
+
+
+
+
+
+
+
+
