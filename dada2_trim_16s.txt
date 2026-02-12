@@ -1,0 +1,103 @@
+### DADA2: Trim 16S fastq files ###
+
+# Create slurm script:
+nano dada2_16s_trimjob.slurm
+
+#!/bin/bash
+#SBATCH --job-name=dada2_16s_trimjob
+#SBATCH --output=logs/dada2_16s_trim_output.log
+#SBATCH --error=logs/dada2_16s_trim_error.log
+#SBATCH --ntasks=1
+#SBATCH --time=4:00:00
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=64G
+#SBATCH --partition=normal
+
+# Load personal conda
+module load sstack/main
+module use /fs1/home/kmg02/sstack/rhel_8/modules
+module load conda/myconda
+
+# Activate R environment and run Rscript
+conda activate r_env_compatible 
+Rscript /fs1/scratch/kmg02/Sequencing_Data/DADA2/Rscripts/dada2_16s_trim.R
+
+# save and exit
+
+sbatch dada2_16s_trimjob.slurm
+
+squeue -j 376233
+# job is running, check back later
+
+
+# Rscript:
+
+nano dada2_16s_trim.R
+
+# Load DADA2 package:
+library(dada2)
+
+# Define base path to fastq files
+path <- "/fs1/scratch/kmg02/Sequencing_Data/16S/primercut_16s"
+
+# Define paths to forward and reverse read folders
+R1_path <- file.path(path, "Forward_R1")
+R2_path <- file.path(path, "Reverse_R2")
+
+# List forward and reverse reads
+fnFs_bact <- list.files(R1_path, pattern="_R1_trimmed.fastq.gz", full.names = TRUE)
+fnRs_bact <- list.files(R2_path, pattern="_R2_trimmed.fastq.gz", full.names = TRUE)
+
+
+# Function to extract sample ID (everything before _R1_ or _R2_)
+getSampleID <- function(f) sub("_R[12]_trimmed.fastq.gz$", "", basename(f))
+
+sampleIDs_F <- sapply(fnFs_bact, getSampleID)
+sampleIDs_R <- sapply(fnRs_bact, getSampleID)
+
+# Find common samples in both forward and reverse
+common_samples <- intersect(sampleIDs_F, sampleIDs_R)
+
+# Subset and order forward files
+fnFs_bact <- fnFs_bact[sampleIDs_F %in% common_samples]
+sampleIDs_F <- sampleIDs_F[sampleIDs_F %in% common_samples]
+ord_F <- order(sampleIDs_F)
+fnFs_bact <- fnFs_bact[ord_F]
+sampleIDs_F <- sampleIDs_F[ord_F]
+
+# Subset and order reverse files
+fnRs_bact <- fnRs_bact[sampleIDs_R %in% common_samples]
+sampleIDs_R <- sampleIDs_R[sampleIDs_R %in% common_samples]
+ord_R <- order(sampleIDs_R)
+fnRs_bact <- fnRs_bact[ord_R]
+sampleIDs_R <- sampleIDs_R[ord_R]
+
+# Check that both vectors are the same length and order
+stopifnot(length(fnFs_bact) == length(fnRs_bact))
+stopifnot(all(sampleIDs_F == sampleIDs_R))
+
+# Use the sample IDs as sample.names
+sample.names <- sampleIDs_F
+
+# Create output filtered file paths using sample.names
+filtFs_bact <- file.path(path, "filtered", paste0(sample.names, "_F_filt.fastq.gz"))
+filtRs_bact <- file.path(path, "filtered", paste0(sample.names, "_R_filt.fastq.gz"))
+
+# Name the output vectors
+names(filtFs_bact) <- sample.names
+names(filtRs_bact) <- sample.names
+
+# Now run filterAndTrim with perfectly matched inputs and outputs
+out_bact <- filterAndTrim(fnFs_bact, filtFs_bact,
+                         fnRs_bact, filtRs_bact,
+                         truncLen=c(270, 250),
+                         maxN=0, maxEE=c(2,2), truncQ=2, rm.phix=TRUE,
+                         compress=TRUE, multithread=4)
+
+head(out_bact)
+write.csv(out_bact, "filtered_output_summary.csv")
+
+
+# save and exit
+sbatch dada2_16s_trim.slurm
+
