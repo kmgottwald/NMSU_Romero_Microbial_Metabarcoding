@@ -1,4 +1,5 @@
 Processing DNA-seq of soil README
+
 Protocol for processing microbial amplicon sequences (16S & ITS) from dryland soils
 Sequencing data (demultiplexed fastq files) is available on NCBI's SRA database:  PRJNA1471992
 I followed DADA2 Pipeline Tutorial (1.16) & (1.8) to process 16S & ITS sequences respectively
